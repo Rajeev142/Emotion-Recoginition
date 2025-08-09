@@ -10,11 +10,18 @@ from pathlib import Path
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
 
-# ----------- Page Config -----------
+# ----------- Load Environment Variables ----------- #
+load_dotenv()
+EMAIL_SENDER = os.getenv("EMAIL_SENDER")
+EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+
+# ----------- Page Config ----------- #
 st.set_page_config(page_title="Emotion Recognition", layout="centered")
 
-# ----------- CSS Styling -----------
+# ----------- CSS Styling ----------- #
 st.markdown("""
     <style>
     .stApp {
@@ -47,7 +54,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ----------- Session State Init -----------
+# ----------- Session State Init ----------- #
 if "shayari" not in st.session_state:
     st.session_state.shayari = None
 if "song_path" not in st.session_state:
@@ -55,10 +62,10 @@ if "song_path" not in st.session_state:
 if "detected_emotion" not in st.session_state:
     st.session_state.detected_emotion = None
 
-# ----------- Title -----------
+# ----------- Title ----------- #
 st.title("🎭 Emotion Recognition App")
 
-# ----------- Image Input -----------
+# ----------- Image Input ----------- #
 option = st.radio("Choose input method:", ["📸 Use Camera", "📂 Upload Image"], horizontal=True)
 image = None
 
@@ -72,13 +79,12 @@ elif option == "📂 Upload Image":
     if uploaded_image:
         image = Image.open(uploaded_image)
 
-# ----------- Emotion Detection & Drawing Box -----------
+# ----------- Emotion Detection & Face Box ----------- #
 if image:
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
         image.save(temp_file.name)
         temp_path = temp_file.name
 
-    # ✅ Reset session state on new image
     st.session_state.shayari = None
     st.session_state.song_path = None
     st.session_state.detected_emotion = None
@@ -87,16 +93,20 @@ if image:
         result = DeepFace.analyze(img_path=temp_path, actions=['emotion'], enforce_detection=False)
         emotion = result[0]['dominant_emotion'].capitalize()
         st.session_state.detected_emotion = emotion
-        st.success(f"✅ Detected Emotion: *{emotion}*")
 
         region = result[0]["region"]
         x, y, w, h = region["x"], region["y"], region["w"], region["h"]
 
         img_cv = cv2.cvtColor(np.array(image.convert("RGB")), cv2.COLOR_RGB2BGR)
         cv2.rectangle(img_cv, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+        # First show preview image with rectangle
         st.image(cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB), caption="🖼 Detected Face", use_container_width=True)
 
-        # Shayari & Song functions
+        # Now show detected emotion below the preview
+        st.success(f"✅ Detected Emotion: *{emotion}*")
+
+        # ---------- Shayari & Song Functions ---------- #
         def get_shayari(emotion):
             try:
                 base = Path("C:/Users/ADMIN/Desktop/Internship Project/shayri")
@@ -115,7 +125,6 @@ if image:
             except:
                 return None
 
-        # ✅ Set only once after detection
         if st.session_state.shayari is None:
             st.session_state.shayari = get_shayari(emotion)
         if st.session_state.song_path is None:
@@ -126,7 +135,7 @@ if image:
     finally:
         os.remove(temp_path)
 
-# ----------- Display Buttons -----------
+# ----------- Display Buttons ----------- #
 if st.session_state.detected_emotion:
     col1, col2 = st.columns(2)
     with col1:
@@ -139,22 +148,18 @@ if st.session_state.detected_emotion:
             else:
                 st.warning("⚠ Song not found.")
 
-# ----------- Email Suggestion -----------
+# ----------- Email Sender Function ----------- #
 def send_email(subject, body):
-    sender = "abc123@gmail.com"
-    receiver = "abc123@gmail.com"
-    password = "abcd efgh ijkl mnop"  # App Password
-
-    msg = MIMEMultipart()
-    msg["From"] = sender
-    msg["To"] = receiver
-    msg["Subject"] = subject
-    msg.attach(MIMEText(body, "plain"))
-
     try:
+        msg = MIMEMultipart()
+        msg["From"] = EMAIL_SENDER
+        msg["To"] = EMAIL_RECEIVER
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "plain"))
+
         server = smtplib.SMTP("smtp.gmail.com", 587)
         server.starttls()
-        server.login(sender, password)
+        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
         server.send_message(msg)
         server.quit()
         return True
@@ -162,20 +167,20 @@ def send_email(subject, body):
         st.error(f"❌ Failed to send email: {e}")
         return False
 
-# ----------- Suggestion Form -----------
+# ----------- Suggestion Form ----------- #
 st.markdown("---")
 st.subheader("💡 Suggest Us")
 
 with st.form("suggestion_form"):
     name = st.text_input("Your Name")
-    email = st.text_input("Your Email")
-    phone = st.text_input("Your Phone Number")
+    #email = st.text_input("Your Email")
+    #phone = st.text_input("Your Phone Number")
     suggestion = st.text_area("Your Suggestion")
 
     if st.form_submit_button("Submit Suggestion"):
         if name.strip() and email.strip() and phone.strip() and suggestion.strip():
             body = f"👤 Name: {name}\n📧 Email: {email}\n📱 Phone: {phone}\n💡 Suggestion:\n{suggestion}"
-            if send_email("New Suggestion from Streamlit App", body):
+            if send_email("New Suggestion from Emotion Recognition App", body):
                 st.success("✅ Thank you! Your suggestion has been sent.")
         else:
             st.warning("⚠ Please fill all fields.")
